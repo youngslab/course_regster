@@ -8,7 +8,8 @@ import os
 import time
 from enum import Enum
 
-is_testing = False
+# To get argument
+import argparse
 
 
 def create_driver(headless=False):
@@ -38,30 +39,65 @@ class Category(Enum):
     ETC = "8.수학,주산,체스"
 
 
-# 23' 박하얀 방과후 수업
-classes = [(Category.ETC, "주산암산A"), (Category.FRI, "로봇B"), (Category.ETC, "체스A"),
-           (Category.MON, "요리체험A")]
 
-joy_url = 'https://www.afteredu.kr/register/info.asp?School_id=120023&uKey=06877C6'
-
-hani_url = 'https://w2.afteredu.kr/register/info.asp?School_id=120023&uKey=13A331B'
+# children = dict()
+table = {
+    "hani": {
+        "url": "https://www.afteredu.kr/register/info.asp?School_id=120023&uKey=13A331B",
+        "classes": [(Category.FRI, "아나운서&성우교실A"), (Category.ETC, "체스A")],
+        "key": "13A331B"
+    },
+    "joy": {
+        "url": "https://www.afteredu.kr/register/info.asp?School_id=120023&uKey=06877C6",
+        "classes": [(Category.COM, "컴퓨터-엔트리코딩프로그래밍B")],
+        "key" : "06877C6"
+    }
+}
 
 if __name__ == "__main__":
-    driver = create_driver()
-    context = browser.Context(driver, hani_url, default_timeout=10)
+    # argument parsing
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--test", action="store_true", help="set test mode")
+    parser.add_argument("--child", required=True, help="pick one of your children [hani|joy]")
+    args = parser.parse_args()
 
-    while not is_application_period(context) and not is_testing:
+    driver = create_driver()
+    context = browser.Context(driver, table[args.child]["url"], default_timeout=10)
+
+    print(f"{args.child} 수강신청. 시작을 원하시면 enter를 누르세요.")
+    input()
+
+
+    ############# 수강신청 준비 ##############
+    # TODO: 이 구간의 변경이 일어난다면 수강신청을 제대로 할 수 없다. 따라서
+    # 만약의 경우 (ex. 버튼 이름 변경)를 대비하여 강제로 시작할 수 있도록 구현이
+    # 필요하다.
+
+    while not is_application_period(context) and not args.test:
         print("수강신청 기간이 아닙니다.")
         time.sleep(0.5)
         context.refresh()
 
-    for cls in classes:
+
+    # 수강신청 버튼이 나타날때 까지 대기 (수강신청 기간이 아닙니다 는 사라지고,
+    # 약 70초 이후에 수강신청/확인 버튼이 활성화된다. 
+    # 약 1초에 한번씩 refesh 되는 것으로 보이는데 button element가 DOM 에 갑자기
+    # 등장한다.
+    btn = browser.ClickableElement(context, by="xpath",
+                                       path=f"//a[contains(text(), '수강신청/확인')]")
+    if not btn.exist(timeout = 120):
+        print("Failed to find 수강신청 button")
+
+
+    ########### 수강 신청 ################
+    # XXX: 이구간은 미리 파악 할 수 있기 때문에 큰 변경사항은 없을 것이다.
+    for cls in table[args.child]["classes"]:
         cat: Category = cls[0]
         name = cls[1]
 
         # 수강신청 페이지로 이동
         context.set_url(
-            f"https://www.afteredu.kr/register/subscribe1.asp?school_id=120023&subject_do={cat.value}&inning=2023-1&ukey=06877C6")
+            f"https://www.afteredu.kr/register/subscribe1.asp?school_id=120023&subject_do={cat.value}&inning=2023-1&ukey={table[args.child]['key']}")
 
         # 강좌 등록버튼 클릭
         btn = browser.ClickableElement(context, by="xpath",
@@ -76,7 +112,6 @@ if __name__ == "__main__":
 
         # 결과 출력
         print(f"수강신청 {'성공' if ok else '실패'}: 영역={cat}, 이름={name}")
-
 
     # Category 선택
 
